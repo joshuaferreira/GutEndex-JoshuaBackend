@@ -164,21 +164,38 @@ const getBooks = async (req, res) => {
                             } else {
                                     queryOptions.where = { [Op.or]: topicOr };
                             }
-                            // Ensure aliases are available in WHERE by avoiding subquery; group by Book.id to prevent row explosion
+                            // Ensure aliases are available in WHERE by avoiding subquery
                             queryOptions.subQuery = false;
-                            queryOptions.group = [
-                                'Book.id',
-                                'authors.id',
-                                'languages.id',
-                                'languages.code',
-                                'subjects.id',
-                                'bookshelves.id',
-                                'formats.id'
-                            ];
                         }
                 }
 
-    const { count, rows: books } = await Book.findAndCountAll(queryOptions);
+    const books = await Book.findAll(queryOptions);
+
+    let totalCount;
+    if (topic) {
+        const countOptions = {
+            where: queryOptions.where,
+            include: include.map(inc => ({
+                ...inc,
+                attributes: [],
+                required: inc.required || false
+            })),
+            subQuery: false,
+            distinct: true,
+            col: 'Book.id'
+        };
+        totalCount = await Book.count(countOptions);
+    } else {
+        totalCount = await Book.count({
+            where: bookWhere,
+            include: include.map(inc => ({
+                ...inc,
+                attributes: [],
+                required: inc.required || false
+            })),
+            distinct: true
+        });
+    }
 
     // Format response
 const formattedBooks = books.map(
