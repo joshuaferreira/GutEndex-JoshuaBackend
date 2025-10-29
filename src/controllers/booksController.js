@@ -166,9 +166,14 @@ const getBooks = async (req, res) => {
                             }
                             // Ensure aliases are available in WHERE by avoiding subquery; group by Book.id to prevent row explosion
                             queryOptions.subQuery = false;
-                            if (!queryOptions.group) {
-                                queryOptions.group = ['Book.id'];
-                            }
+                            queryOptions.group = [
+                                'Book.id',
+                                'authors.id',
+                                'languages.code',
+                                'subjects.id',
+                                'bookshelves.id',
+                                'formats.id'
+                            ];
                         }
                 }
 
