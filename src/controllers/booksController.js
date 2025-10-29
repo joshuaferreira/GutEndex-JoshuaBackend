@@ -148,44 +148,31 @@ const getBooks = async (req, res) => {
       distinct: true
     };
 
-    if (topic) {
-        const topicTerms = topic
-            .split(',')
-            .map(t => t.trim().toLowerCase())
-            .filter(Boolean);
-        
-        if (topicTerms.length) {
-            const topicOr = topicTerms.flatMap(t => ([
-                { '$subjects.name$': { [Op.like]: `%${t}%` } },
-                { '$bookshelves.name$': { [Op.like]: `%${t}%` } }
-            ]));
-            
-            if (Object.keys(bookWhere).length > 0) {
-                queryOptions.where = { [Op.and]: [bookWhere, { [Op.or]: topicOr }] };
-            } else {
-                queryOptions.where = { [Op.or]: topicOr };
-            }
-            
-            queryOptions.subQuery = false;
-        }
-    }
+                // Topic filter: support multiple comma-separated topics (OR across all) using association paths
+                if (topic) {
+                        const topicTerms = topic
+                            .split(',')
+                            .map(t => t.trim().toLowerCase())
+                            .filter(Boolean);
+                        if (topicTerms.length) {
+                            const topicOr = topicTerms.flatMap(t => ([
+                                { '$subjects.name$': { [Op.like]: `%${t}%` } },
+                                { '$bookshelves.name$': { [Op.like]: `%${t}%` } }
+                            ]));
+                            if (Object.keys(bookWhere).length > 0) {
+                                    queryOptions.where = { [Op.and]: [bookWhere, { [Op.or]: topicOr }] };
+                            } else {
+                                    queryOptions.where = { [Op.or]: topicOr };
+                            }
+                            // Ensure aliases are available in WHERE by avoiding subquery; group by Book.id to prevent row explosion
+                            queryOptions.subQuery = false;
+                            if (!queryOptions.group) {
+                                queryOptions.group = ['Book.id'];
+                            }
+                        }
+                }
 
-    // Fetch books
-    const books = await Book.findAll(queryOptions);
-
-    // Count - must include same associations for WHERE to work
-    const totalCount = await Book.count({
-        where: queryOptions.where,
-        include: queryOptions.include.map(inc => ({
-            model: inc.model,
-            as: inc.as,
-            attributes: [],
-            through: { attributes: [] },
-            required: false
-        })),
-        distinct: true
-    });
-
+    const { count, rows: books } = await Book.findAndCountAll(queryOptions);
 
     // Format response
 const formattedBooks = books.map(
@@ -224,8 +211,8 @@ const formattedBooks = books.map(
 );
 
     res.json({
-      count: totalCount,
-      next: offset + limit < totalCount ? parseInt(page) + 1 : null,
+      count: typeof count === 'number' ? count : count.length,
+      next: offset + limit < (typeof count === 'number' ? count : count.length) ? parseInt(page) + 1 : null,
       previous: page > 1 ? parseInt(page) - 1 : null,
       results: formattedBooks
     });
