@@ -234,8 +234,8 @@ const formattedBooks = books.map(
 );
 
     res.json({
-      count: typeof count === 'number' ? count : count.length,
-      next: offset + limit < (typeof count === 'number' ? count : count.length) ? parseInt(page) + 1 : null,
+      count: totalCount,
+      next: offset + limit < totalCount ? parseInt(page) + 1 : null,
       previous: page > 1 ? parseInt(page) - 1 : null,
       results: formattedBooks
     });
