@@ -61,6 +61,7 @@ Pagination:
 - topic: matches either Subjects or Bookshelves names (case-insensitive partial)
   - Multiple topics supported; OR across topics and across subjects/bookshelves
   - Example: `?topic=child,infant` matches “Children’s literature”, “Child education”, etc.
+  - Some Unexpected Behaviour
 - author: case-insensitive partial
   - Multiple comma-separated phrases; inside each phrase, all words must match (AND)
   - Example: `?author=william shakespeare,mark twain`
