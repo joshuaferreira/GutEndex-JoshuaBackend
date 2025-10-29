@@ -181,8 +181,7 @@ const getBooks = async (req, res) => {
                 required: inc.required || false
             })),
             subQuery: false,
-            distinct: true,
-            col: 'Book.id'
+            distinct: true
         };
         totalCount = await Book.count(countOptions);
     } else {
