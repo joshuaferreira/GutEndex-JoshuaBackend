@@ -148,42 +148,32 @@ const getBooks = async (req, res) => {
       distinct: true
     };
 
-                // Topic filter: support multiple comma-separated topics (OR across all) using association paths
-                if (topic) {
-                        const topicTerms = topic
-                            .split(',')
-                            .map(t => t.trim().toLowerCase())
-                            .filter(Boolean);
-                        if (topicTerms.length) {
-                            const topicOr = topicTerms.flatMap(t => ([
-                                { '$subjects.name$': { [Op.like]: `%${t}%` } },
-                                { '$bookshelves.name$': { [Op.like]: `%${t}%` } }
-                            ]));
-                            if (Object.keys(bookWhere).length > 0) {
-                                    queryOptions.where = { [Op.and]: [bookWhere, { [Op.or]: topicOr }] };
-                            } else {
-                                    queryOptions.where = { [Op.or]: topicOr };
-                            }
-                            // Use subQuery to ensure DISTINCT works on Book.id only
-                            queryOptions.subQuery = true;
-                        }
-                }
+    if (topic) {
+        const topicTerms = topic
+            .split(',')
+            .map(t => t.trim().toLowerCase())
+            .filter(Boolean);
+        
+        if (topicTerms.length) {
+            const topicOr = topicTerms.flatMap(t => ([
+                { '$subjects.name$': { [Op.like]: `%${t}%` } },
+                { '$bookshelves.name$': { [Op.like]: `%${t}%` } }
+            ]));
+            
+            if (Object.keys(bookWhere).length > 0) {
+                queryOptions.where = { [Op.and]: [bookWhere, { [Op.or]: topicOr }] };
+            } else {
+                queryOptions.where = { [Op.or]: topicOr };
+            }
+            
+        }
+    }
 
-    const books = await Book.findAll(queryOptions);
+const result = await Book.findAndCountAll(queryOptions);
 
-
-    // Simpler count - just count distinct books with same filters
-    const countOptions = {
-        where: queryOptions.where,
-        include: include.map(inc => ({
-            ...inc,
-            attributes: [],
-            required: inc.required || false
-        })),
-        distinct: true
-    };
-    
-    const totalCount = await Book.count(countOptions);
+// Handle grouped count
+const totalCount = Array.isArray(result.count) ? result.count.length : result.count;
+const books = result.rows;
 
 
     // Format response
