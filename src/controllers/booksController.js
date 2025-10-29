@@ -164,37 +164,27 @@ const getBooks = async (req, res) => {
                             } else {
                                     queryOptions.where = { [Op.or]: topicOr };
                             }
-                            // Ensure aliases are available in WHERE by avoiding subquery
-                            queryOptions.subQuery = false;
+                            // Use subQuery to ensure DISTINCT works on Book.id only
+                            queryOptions.subQuery = true;
                         }
                 }
 
     const books = await Book.findAll(queryOptions);
 
-    let totalCount;
-    if (topic) {
-        const countOptions = {
-            where: queryOptions.where,
-            include: include.map(inc => ({
-                ...inc,
-                attributes: [],
-                required: inc.required || false
-            })),
-            subQuery: false,
-            distinct: true
-        };
-        totalCount = await Book.count(countOptions);
-    } else {
-        totalCount = await Book.count({
-            where: bookWhere,
-            include: include.map(inc => ({
-                ...inc,
-                attributes: [],
-                required: inc.required || false
-            })),
-            distinct: true
-        });
-    }
+
+    // Simpler count - just count distinct books with same filters
+    const countOptions = {
+        where: queryOptions.where,
+        include: include.map(inc => ({
+            ...inc,
+            attributes: [],
+            required: inc.required || false
+        })),
+        distinct: true
+    };
+    
+    const totalCount = await Book.count(countOptions);
+
 
     // Format response
 const formattedBooks = books.map(
