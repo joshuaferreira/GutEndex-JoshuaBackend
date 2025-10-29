@@ -166,14 +166,25 @@ const getBooks = async (req, res) => {
                 queryOptions.where = { [Op.or]: topicOr };
             }
             
+            queryOptions.subQuery = false;
         }
     }
 
-const result = await Book.findAndCountAll(queryOptions);
+    // Fetch books
+    const books = await Book.findAll(queryOptions);
 
-// Handle grouped count
-const totalCount = Array.isArray(result.count) ? result.count.length : result.count;
-const books = result.rows;
+    // Count - must include same associations for WHERE to work
+    const totalCount = await Book.count({
+        where: queryOptions.where,
+        include: queryOptions.include.map(inc => ({
+            model: inc.model,
+            as: inc.as,
+            attributes: [],
+            through: { attributes: [] },
+            required: false
+        })),
+        distinct: true
+    });
 
 
     // Format response
