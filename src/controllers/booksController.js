@@ -169,6 +169,7 @@ const getBooks = async (req, res) => {
                             queryOptions.group = [
                                 'Book.id',
                                 'authors.id',
+                                'languages.id',
                                 'languages.code',
                                 'subjects.id',
                                 'bookshelves.id',
