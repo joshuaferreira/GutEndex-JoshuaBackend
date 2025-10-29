@@ -14,11 +14,13 @@ const getBooks = async (req, res) => {
         } = req.query;
 
         // Pagination setup
+        const parsedPage = Number.parseInt(page, 10);
+        const currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
         // Default limit to 25 items per page
         const limit = 25;
         // Calculate offset
-        const offset = (page - 1) * limit;
+        const offset = (currentPage - 1) * limit;
 
         // Build where conditions for the main Book query
         const bookWhere = {};
@@ -149,28 +151,100 @@ const getBooks = async (req, res) => {
     };
 
                 // Topic filter: support multiple comma-separated topics (OR across all) using association paths
-                if (topic) {
-                        const topicTerms = topic
-                            .split(',')
-                            .map(t => t.trim().toLowerCase())
-                            .filter(Boolean);
-                        if (topicTerms.length) {
-                            const topicOr = topicTerms.flatMap(t => ([
-                                { '$subjects.name$': { [Op.like]: `%${t}%` } },
-                                { '$bookshelves.name$': { [Op.like]: `%${t}%` } }
-                            ]));
-                            if (Object.keys(bookWhere).length > 0) {
-                                    queryOptions.where = { [Op.and]: [bookWhere, { [Op.or]: topicOr }] };
-                            } else {
-                                    queryOptions.where = { [Op.or]: topicOr };
-                            }
-                            // Ensure aliases are available in WHERE by avoiding subquery; group by Book.id to prevent row explosion
-                            queryOptions.subQuery = false;
-                            if (!queryOptions.group) {
-                                queryOptions.group = ['Book.id'];
-                            }
-                        }
+                // if (topic) {
+                //         const topicTerms = topic
+                //             .split(',')
+                //             .map(t => t.trim().toLowerCase())
+                //             .filter(Boolean);
+                //         if (topicTerms.length) {
+                //             const topicOr = topicTerms.flatMap(t => ([
+                //                 { '$subjects.name$': { [Op.like]: `%${t}%` } },
+                //                 { '$bookshelves.name$': { [Op.like]: `%${t}%` } }
+                //             ]));
+                //             if (Object.keys(bookWhere).length > 0) {
+                //                     queryOptions.where = { [Op.and]: [bookWhere, { [Op.or]: topicOr }] };
+                //             } else {
+                //                     queryOptions.where = { [Op.or]: topicOr };
+                //             }
+                //             // Ensure aliases are available in WHERE by avoiding subquery; group by Book.id to prevent row explosion
+                //             queryOptions.subQuery = false;
+                //             if (!queryOptions.group) {
+                //                 queryOptions.group = ['Book.id'];
+                //             }
+                //         }
+                // }
+
+    if (topic) {
+            const topicTerms = topic
+                .split(',')
+                .map(t => t.trim().toLowerCase())
+                .filter(Boolean);
+
+            if (topicTerms.length) {
+                const topicConditions = topicTerms.map(term => ({ name: { [Op.like]: `%${term}%` } }));
+                const [subjectMatches, bookshelfMatches] = await Promise.all([
+                    Book.findAll({
+                        attributes: ['id'],
+                        include: [{
+                            model: Subject,
+                            as: 'subjects',
+                            attributes: [],
+                            through: { attributes: [] },
+                            where: { [Op.or]: topicConditions },
+                            required: true
+                        }],
+                        group: ['Book.id'],
+                        raw: true
+                    }),
+                    Book.findAll({
+                        attributes: ['id'],
+                        include: [{
+                            model: Bookshelf,
+                            as: 'bookshelves',
+                            attributes: [],
+                            through: { attributes: [] },
+                            where: { [Op.or]: topicConditions },
+                            required: true
+                        }],
+                        group: ['Book.id'],
+                        raw: true
+                    })
+                ]);
+
+                const extractId = row => row.id ?? row['Book.id'];
+                const topicIds = [
+                    ...new Set(
+                        [...subjectMatches, ...bookshelfMatches]
+                            .map(extractId)
+                            .filter(Number.isFinite)
+                    )
+                ];
+
+                if (!topicIds.length) {
+                    return res.json({
+                        count: 0,
+                        next: null,
+                        previous: currentPage > 1 ? currentPage - 1 : null,
+                        results: []
+                    });
                 }
+
+                if (bookWhere.id && bookWhere.id[Op.in]) {
+                    const narrowed = bookWhere.id[Op.in].filter(id => topicIds.includes(id));
+                    if (!narrowed.length) {
+                        return res.json({
+                            count: 0,
+                            next: null,
+                            previous: currentPage > 1 ? currentPage - 1 : null,
+                            results: []
+                        });
+                    }
+                    bookWhere.id = { [Op.in]: narrowed };
+                } else {
+                    bookWhere.id = { [Op.in]: topicIds };
+                }
+            }
+        }
 
     const { count, rows: books } = await Book.findAndCountAll(queryOptions);
 
@@ -210,10 +284,11 @@ const formattedBooks = books.map(
             )
 );
 
+    const totalCount = typeof count === 'number' ? count : count.length;
     res.json({
-      count: typeof count === 'number' ? count : count.length,
-      next: offset + limit < (typeof count === 'number' ? count : count.length) ? parseInt(page) + 1 : null,
-      previous: page > 1 ? parseInt(page) - 1 : null,
+      count: totalCount,
+      next: offset + limit < totalCount ? currentPage + 1 : null,
+      previous: currentPage > 1 ? currentPage - 1 : null,
       results: formattedBooks
     });
 
