@@ -1,6 +1,7 @@
 # Books API
 
 Express + Sequelize API that exposes a Gutendex-like books endpoint with filtering, pagination, and eager-loaded associations.
+https://gutendex-joshuabackend.onrender.com/health
 
 ## Quick start
 
